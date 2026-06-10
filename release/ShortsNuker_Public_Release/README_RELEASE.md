@@ -7,8 +7,11 @@ ShortsNuker v1.0.0 is a YouTube-only Chrome Manifest V3 extension for removing S
 * Remove YouTube Shorts.
 * Strict Search Title Match.
 * Theme Color Test.
+* Theme Surface Test.
 * Popup toggles.
 * Persistent settings.
+
+Theme Surface Test applies a stronger visual skin to nested YouTube interface surfaces where targetable. If both theme tests are enabled, Theme Surface Test may override the simpler Theme Color Test layer.
 
 ## Service Worker Status
 

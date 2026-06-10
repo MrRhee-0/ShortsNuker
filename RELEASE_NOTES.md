@@ -9,6 +9,7 @@ ShortsNuker v1.0.0 is the first public release package for the YouTube-only Chro
 * Remove YouTube Shorts.
 * Strict Search Title Match for YouTube search results.
 * Theme Color Test for visible user-controlled styling.
+* Theme Surface Test for visible masthead, search box, sidebar, card, comment, metadata, button, icon, and chip styling where targetable.
 * Popup toggles for all features.
 * Persistent settings through Chrome extension storage.
 * Extension icons.
@@ -30,6 +31,7 @@ ShortsNuker does not collect personal data, does not use analytics or telemetry,
 
 * YouTube layout changes may require selector updates.
 * Theme Color Test is a simple proof-of-capability visual test.
+* Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.
 
 ## Verification Checklist
 

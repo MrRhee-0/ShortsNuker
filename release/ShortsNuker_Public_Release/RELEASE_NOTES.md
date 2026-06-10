@@ -7,6 +7,7 @@ ShortsNuker v1.0.0 packages the current YouTube-only Manifest V3 extension for p
 * Remove YouTube Shorts.
 * Strict Search Title Match.
 * Theme Color Test.
+* Theme Surface Test.
 * Popup toggles.
 * Persistent settings.
 
@@ -22,3 +23,4 @@ No analytics, telemetry, tracking, external servers, browsing history collection
 
 * YouTube layout changes may require selector updates.
 * Theme Color Test is a proof-of-capability feature.
+* Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.

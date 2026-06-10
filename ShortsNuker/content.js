@@ -9,10 +9,12 @@
     const DEFAULT_SETTINGS = {
         removeShorts: true,
         strictSearchTitleMatch: true,
-        themeColorTest: false
+        themeColorTest: false,
+        themeSurfaceTest: false
     };
     const SHORTS_STYLE_ID = "shorts-nuker-style";
     const THEME_STYLE_ID = "shorts-nuker-theme-style";
+    const SURFACE_THEME_STYLE_ID = "shorts-nuker-surface-theme-style";
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
         "ytd-rich-shelf-renderer[is-shorts]",
@@ -153,6 +155,192 @@
         removeStyleById(THEME_STYLE_ID);
     }
 
+    function installSurfaceThemeStyle() {
+        if (document.getElementById(SURFACE_THEME_STYLE_ID)) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.id = SURFACE_THEME_STYLE_ID;
+        style.textContent = `
+            :root {
+                --shorts-nuker-surface-bg: #09111a;
+                --shorts-nuker-surface-panel: rgba(17, 28, 41, 0.94);
+                --shorts-nuker-surface-card: rgba(24, 39, 56, 0.88);
+                --shorts-nuker-surface-card-hover: rgba(31, 50, 70, 0.95);
+                --shorts-nuker-surface-border: rgba(255, 61, 78, 0.55);
+                --shorts-nuker-surface-accent: #ff3148;
+                --shorts-nuker-surface-text: #f6f8ff;
+                --shorts-nuker-surface-muted: #b7c2d1;
+                --shorts-nuker-surface-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+            }
+
+            html,
+            body,
+            ytd-app,
+            #page-manager,
+            ytd-page-manager {
+                background: var(--shorts-nuker-surface-bg) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            ytd-masthead,
+            #masthead-container,
+            #container.ytd-masthead,
+            #background.ytd-masthead {
+                background: rgba(10, 18, 28, 0.98) !important;
+                border-bottom: 1px solid var(--shorts-nuker-surface-border) !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            ytd-searchbox,
+            ytd-searchbox #container,
+            #search-form,
+            #search-input,
+            input#search {
+                background: rgba(8, 16, 25, 0.96) !important;
+                border-color: var(--shorts-nuker-surface-border) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            ytd-searchbox #container,
+            #search-form {
+                border-radius: 8px !important;
+                box-shadow: inset 0 0 0 1px rgba(255, 61, 78, 0.18) !important;
+            }
+
+            input#search::placeholder {
+                color: var(--shorts-nuker-surface-muted) !important;
+            }
+
+            [role="listbox"],
+            [role="option"],
+            yt-searchbox-suggestions,
+            ytd-searchbox-suggestion-renderer {
+                background: rgba(12, 22, 33, 0.98) !important;
+                border-color: var(--shorts-nuker-surface-border) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            [role="option"]:hover,
+            ytd-searchbox-suggestion-renderer:hover {
+                background: rgba(255, 49, 72, 0.18) !important;
+            }
+
+            ytd-guide-renderer,
+            ytd-mini-guide-renderer,
+            #sections.ytd-guide-renderer,
+            ytd-guide-entry-renderer,
+            ytd-mini-guide-entry-renderer {
+                background: var(--shorts-nuker-surface-panel) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            ytd-guide-entry-renderer:hover,
+            ytd-mini-guide-entry-renderer:hover {
+                background: rgba(255, 49, 72, 0.14) !important;
+            }
+
+            yt-chip-cloud-renderer,
+            yt-chip-cloud-chip-renderer,
+            yt-chip-cloud-chip-renderer[chip-style] {
+                background: rgba(12, 22, 33, 0.86) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            yt-chip-cloud-chip-renderer {
+                border: 1px solid rgba(255, 61, 78, 0.38) !important;
+                border-radius: 999px !important;
+            }
+
+            ytd-video-renderer,
+            ytd-rich-item-renderer,
+            ytd-rich-grid-media,
+            ytd-compact-video-renderer,
+            yt-lockup-view-model,
+            ytd-comment-thread-renderer,
+            ytd-comment-view-model {
+                background: var(--shorts-nuker-surface-card) !important;
+                border: 1px solid rgba(255, 61, 78, 0.24) !important;
+                border-radius: 8px !important;
+                box-shadow: var(--shorts-nuker-surface-shadow) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            ytd-video-renderer:hover,
+            ytd-rich-item-renderer:hover,
+            ytd-rich-grid-media:hover,
+            ytd-compact-video-renderer:hover,
+            yt-lockup-view-model:hover {
+                background: var(--shorts-nuker-surface-card-hover) !important;
+                border-color: var(--shorts-nuker-surface-border) !important;
+            }
+
+            #content-text,
+            #video-title,
+            yt-formatted-string,
+            ytd-video-meta-block,
+            #metadata-line,
+            #metadata-line span,
+            #description,
+            #description-text,
+            #byline,
+            #channel-name,
+            ytd-comment-thread-renderer #author-text,
+            ytd-comment-thread-renderer #published-time-text {
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            #metadata-line,
+            #metadata-line span,
+            ytd-video-meta-block,
+            ytd-comment-thread-renderer #published-time-text,
+            ytd-comment-thread-renderer #vote-count-middle {
+                color: var(--shorts-nuker-surface-muted) !important;
+            }
+
+            button,
+            tp-yt-paper-button,
+            [role="button"],
+            yt-button-shape button,
+            .yt-spec-button-shape-next {
+                border-color: rgba(255, 61, 78, 0.38) !important;
+                color: var(--shorts-nuker-surface-text) !important;
+            }
+
+            button:hover,
+            tp-yt-paper-button:hover,
+            [role="button"]:hover,
+            yt-button-shape button:hover,
+            .yt-spec-button-shape-next:hover {
+                background-color: rgba(255, 49, 72, 0.16) !important;
+            }
+
+            yt-icon,
+            yt-icon svg,
+            yt-icon path,
+            ytd-masthead yt-icon,
+            ytd-menu-renderer yt-icon,
+            ytd-toggle-button-renderer yt-icon,
+            ytd-notification-topbar-button-renderer yt-icon {
+                color: var(--shorts-nuker-surface-accent) !important;
+                fill: var(--shorts-nuker-surface-accent) !important;
+                stroke: var(--shorts-nuker-surface-accent) !important;
+            }
+
+            a,
+            a:visited {
+                color: #ff7281 !important;
+            }
+        `;
+        document.documentElement.appendChild(style);
+    }
+
+    function removeSurfaceThemeStyle() {
+        removeStyleById(SURFACE_THEME_STYLE_ID);
+    }
+
     function removeElement(element) {
         if (element && element.parentNode) {
             element.remove();
@@ -227,6 +415,12 @@
             installThemeStyle();
         } else {
             removeThemeStyle();
+        }
+
+        if (currentSettings.themeSurfaceTest) {
+            installSurfaceThemeStyle();
+        } else {
+            removeSurfaceThemeStyle();
         }
     }
 

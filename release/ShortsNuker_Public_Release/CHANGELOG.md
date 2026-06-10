@@ -10,5 +10,6 @@ All notable changes to this project are documented in this file.
 * Strict Search Title Match.
 * Popup controls.
 * Theme Color Test.
+* Theme Surface Test.
 * Icon support.
 * Public release packaging.

@@ -4,7 +4,8 @@
     const DEFAULT_SETTINGS = {
         removeShorts: true,
         strictSearchTitleMatch: true,
-        themeColorTest: false
+        themeColorTest: false,
+        themeSurfaceTest: false
     };
     const CONTROL_IDS = Object.keys(DEFAULT_SETTINGS);
     const status = document.getElementById("status");
