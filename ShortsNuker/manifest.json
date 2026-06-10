@@ -1,0 +1,13 @@
+{
+"manifest_version": 3,
+"name": "Shorts Nuker",
+"version": "1.0",
+"description": "Removes YouTube Shorts shelves and Shorts results from YouTube.",
+"content_scripts": [
+{
+"matches": ["*://*.youtube.com/*"],
+"js": ["content.js"],
+"run_at": "document_idle"
+}
+]
+}
