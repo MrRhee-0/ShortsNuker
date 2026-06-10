@@ -1,13 +1,30 @@
 {
-"manifest_version": 3,
-"name": "Shorts Nuker",
-"version": "1.0",
-"description": "Removes YouTube Shorts shelves and Shorts results from YouTube.",
-"content_scripts": [
-{
-"matches": ["*://*.youtube.com/*"],
-"js": ["content.js"],
-"run_at": "document_idle"
-}
-]
+  "manifest_version": 3,
+  "name": "Shorts Nuker",
+  "version": "1.1",
+  "description": "Removes YouTube Shorts shelves and irrelevant YouTube search results from YouTube.",
+  "permissions": ["storage"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "ShortsNuker",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }

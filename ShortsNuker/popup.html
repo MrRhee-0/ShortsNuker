@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShortsNuker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <header class="popup__header">
+      <img class="popup__icon" src="icons/icon48.png" alt="">
+      <div>
+        <h1>ShortsNuker</h1>
+        <p>YouTube controls</p>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="ShortsNuker controls">
+      <label class="toggle-row">
+        <span>Remove Shorts</span>
+        <input id="removeShorts" type="checkbox" role="switch">
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+
+      <label class="toggle-row">
+        <span>Strict Search Title Match</span>
+        <input id="strictSearchTitleMatch" type="checkbox" role="switch">
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+
+      <label class="toggle-row toggle-row--stacked">
+        <span>
+          Theme Color Test
+          <small>Test feature: changes YouTube background colors</small>
+        </span>
+        <input id="themeColorTest" type="checkbox" role="switch">
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+    </section>
+
+    <p id="status" class="status" aria-live="polite">Changes apply to YouTube tabs</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

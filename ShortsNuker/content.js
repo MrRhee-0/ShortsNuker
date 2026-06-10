@@ -6,7 +6,13 @@
     }
     window.__shortsNukerActive = true;
 
-    const STYLE_ID = "shorts-nuker-style";
+    const DEFAULT_SETTINGS = {
+        removeShorts: true,
+        strictSearchTitleMatch: true,
+        themeColorTest: false
+    };
+    const SHORTS_STYLE_ID = "shorts-nuker-style";
+    const THEME_STYLE_ID = "shorts-nuker-theme-style";
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
         "ytd-rich-shelf-renderer[is-shorts]",
@@ -42,6 +48,32 @@
         "yt-lockup-view-model"
     ];
 
+    let currentSettings = { ...DEFAULT_SETTINGS };
+    let observerStarted = false;
+
+    function getStorageArea() {
+        if (typeof chrome === "undefined" || !chrome.storage) {
+            return null;
+        }
+
+        return chrome.storage.sync || chrome.storage.local || null;
+    }
+
+    function loadSettings() {
+        const storageArea = getStorageArea();
+        if (!storageArea) {
+            currentSettings = { ...DEFAULT_SETTINGS };
+            return Promise.resolve(currentSettings);
+        }
+
+        return new Promise((resolve) => {
+            storageArea.get(DEFAULT_SETTINGS, (storedSettings) => {
+                currentSettings = { ...DEFAULT_SETTINGS, ...storedSettings };
+                resolve(currentSettings);
+            });
+        });
+    }
+
     function queryAllIncludingRoot(root, selectors) {
         if (!root || !root.querySelectorAll) {
             return [];
@@ -59,15 +91,66 @@
         return matches;
     }
 
-    function installStyle() {
-        if (document.getElementById(STYLE_ID)) {
+    function installShortsStyle() {
+        if (document.getElementById(SHORTS_STYLE_ID)) {
             return;
         }
 
         const style = document.createElement("style");
-        style.id = STYLE_ID;
+        style.id = SHORTS_STYLE_ID;
         style.textContent = `${DIRECT_SHORTS_SELECTORS.join(", ")} { display: none !important; }`;
         document.documentElement.appendChild(style);
+    }
+
+    function removeStyleById(styleId) {
+        const style = document.getElementById(styleId);
+        if (style) {
+            style.remove();
+        }
+    }
+
+    function installThemeStyle() {
+        if (document.getElementById(THEME_STYLE_ID)) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.id = THEME_STYLE_ID;
+        style.textContent = `
+            html,
+            body,
+            ytd-app,
+            #content,
+            #page-manager {
+                background: #101923 !important;
+                color: #f3f7ff !important;
+            }
+
+            ytd-page-manager,
+            ytd-watch-flexy,
+            ytd-browse,
+            ytd-search,
+            ytd-two-column-browse-results-renderer,
+            ytd-rich-grid-renderer,
+            #primary,
+            #secondary,
+            #contents {
+                background-color: #142131 !important;
+            }
+
+            ytd-rich-item-renderer,
+            ytd-video-renderer,
+            ytd-compact-video-renderer,
+            ytd-grid-video-renderer,
+            yt-lockup-view-model {
+                background-color: #18283a !important;
+            }
+        `;
+        document.documentElement.appendChild(style);
+    }
+
+    function removeThemeStyle() {
+        removeStyleById(THEME_STYLE_ID);
     }
 
     function removeElement(element) {
@@ -127,27 +210,83 @@
         });
     }
 
-    function nukeShorts(root = document) {
-        installStyle();
-        removeDirectShorts(root);
-        removeShortsLinks(root);
-        removeSearchResultsWithoutQueryTitleOverlap(root);
+    function applyEnabledFeatures(root = document) {
+        if (currentSettings.removeShorts) {
+            installShortsStyle();
+            removeDirectShorts(root);
+            removeShortsLinks(root);
+        } else {
+            removeStyleById(SHORTS_STYLE_ID);
+        }
+
+        if (currentSettings.strictSearchTitleMatch) {
+            removeSearchResultsWithoutQueryTitleOverlap(root);
+        }
+
+        if (currentSettings.themeColorTest) {
+            installThemeStyle();
+        } else {
+            removeThemeStyle();
+        }
+    }
+
+    function refreshFeatures(root = document) {
+        return loadSettings().then(() => {
+            applyEnabledFeatures(root);
+        });
     }
 
     function startObserver() {
+        if (observerStarted) {
+            return;
+        }
+        observerStarted = true;
+
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        nukeShorts(node);
+                        applyEnabledFeatures(node);
                     }
                 });
             });
 
-            nukeShorts();
+            applyEnabledFeatures();
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function installMessageHandlers() {
+        if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.onMessage) {
+            return;
+        }
+
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (!message || message.type !== "refreshFeatures") {
+                return false;
+            }
+
+            refreshFeatures().then(() => {
+                sendResponse({ ok: true });
+            });
+            return true;
+        });
+
+        if (chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, areaName) => {
+                if (areaName !== "sync" && areaName !== "local") {
+                    return;
+                }
+
+                Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+                    if (changes[key]) {
+                        currentSettings[key] = changes[key].newValue;
+                    }
+                });
+                applyEnabledFeatures();
+            });
+        }
     }
 
     function initialize() {
@@ -155,8 +294,10 @@
             return;
         }
 
-        nukeShorts();
-        startObserver();
+        installMessageHandlers();
+        refreshFeatures().then(() => {
+            startObserver();
+        });
     }
 
     if (document.body) {
@@ -166,6 +307,6 @@
     }
 
     window.addEventListener("yt-navigate-finish", () => {
-        nukeShorts();
+        refreshFeatures();
     });
 }());

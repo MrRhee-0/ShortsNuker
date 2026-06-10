@@ -2,9 +2,25 @@
 
 ## Purpose
 
-Shorts Nuker is a Chrome Manifest V3 extension that removes YouTube Shorts shelves, cards, and Shorts links from YouTube pages.
+Shorts Nuker is a Chrome Manifest V3 extension for YouTube-only page cleanup and testing controls.
 
-On YouTube search results pages, it also removes video results whose titles share zero exact normalized words with the current search query. This filter uses exact word overlap only, not semantic matching.
+## Features
+
+* Removes YouTube Shorts shelves, cards, and Shorts links.
+* Removes YouTube search results whose titles share zero exact normalized words with the current search query.
+* Includes a simple Theme Color Test that changes YouTube background colors as a visual proof of capability.
+
+The strict search filter uses exact word overlap only. It does not use semantic matching, synonym matching, fuzzy matching, or stemming.
+
+## Popup Controls
+
+Click the extension icon to open the ShortsNuker popup.
+
+* Remove Shorts: turns Shorts DOM removal on or off.
+* Strict Search Title Match: turns strict YouTube search result title filtering on or off.
+* Theme Color Test: turns the simple background color test on or off.
+
+Settings persist through Chrome extension storage. Default states are Remove Shorts on, Strict Search Title Match on, and Theme Color Test off.
 
 ## Folder Structure
 
@@ -12,7 +28,15 @@ On YouTube search results pages, it also removes video results whose titles shar
 ShortsNuker/
 manifest.json
 content.js
+popup.html
+popup.js
+popup.css
 README.md
+icons/
+  icon16.png
+  icon32.png
+  icon48.png
+  icon128.png
 ```
 
 ## Chrome Loading Steps
@@ -28,3 +52,5 @@ README.md
 This extension only affects YouTube pages.
 
 It removes page DOM elements but does not block network requests.
+
+The Theme Color Test is currently a simple visual test only.
