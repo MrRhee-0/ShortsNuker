@@ -1,0 +1,15 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.tmp
+*.bak
+
+# Dependency and build folders should not exist for this project
+node_modules/
+dist/
+build/
+
+# Local release staging scratch space
+release/_staging/

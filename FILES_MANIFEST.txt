@@ -1,0 +1,33 @@
+ShortsNuker v1.0.0 Release-Relevant Files
+
+Repository root:
+README.md - Public project overview, install instructions, permissions, privacy, service worker decision, and development notes.
+CHANGELOG.md - Keep-a-Changelog style release history.
+PRIVACY.md - Extension privacy policy.
+LICENSE - Creative Commons Attribution 4.0 International license.
+RELEASE_NOTES.md - v1.0.0 release notes.
+MANIFEST_CHECK.txt - Manifest and package verification report.
+FILES_MANIFEST.txt - This release-relevant file list.
+.gitignore - Local noise and dependency/build exclusion rules.
+
+Extension package:
+ShortsNuker/manifest.json - Chrome Manifest V3 extension manifest.
+ShortsNuker/content.js - YouTube-only content script for feature application.
+ShortsNuker/popup.html - Popup UI markup.
+ShortsNuker/popup.js - Popup settings persistence and tab refresh messaging.
+ShortsNuker/popup.css - Popup styling.
+ShortsNuker/README.md - Extension-local README.
+ShortsNuker/icons/icon16.png - 16 px extension icon.
+ShortsNuker/icons/icon32.png - 32 px extension icon.
+ShortsNuker/icons/icon48.png - 48 px extension icon.
+ShortsNuker/icons/icon128.png - 128 px extension icon.
+
+Release folder:
+release/ShortsNuker_Public_Release/README_RELEASE.md - Release overview.
+release/ShortsNuker_Public_Release/INSTALL.md - Release installation guide.
+release/ShortsNuker_Public_Release/PRIVACY.md - Release privacy copy.
+release/ShortsNuker_Public_Release/CHANGELOG.md - Release changelog copy.
+release/ShortsNuker_Public_Release/RELEASE_NOTES.md - Release notes copy.
+release/ShortsNuker_Public_Release/MANIFEST_CHECK.txt - Release manifest verification copy.
+release/ShortsNuker_Public_Release/FILES_MANIFEST.txt - Release folder file list.
+release/ShortsNuker-v1.0.0.zip - Load-unpacked extension ZIP package.

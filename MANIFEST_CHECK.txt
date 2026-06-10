@@ -1,0 +1,21 @@
+ShortsNuker Manifest Verification Report
+Version: v1.0.0
+Date: 2026-06-10
+
+1. Manifest version is 3: PASS
+2. Host match scope is YouTube-only: PASS
+   Match pattern: *://*.youtube.com/*
+3. Permissions are minimal: PASS
+   Permissions: storage
+4. Storage permission exists only for toggle persistence: PASS
+5. No external libraries: PASS
+6. No npm/build dependency: PASS
+7. No analytics/tracking: PASS
+8. Background service worker status: Not used
+   Reason: The extension is content-script + popup based. Settings load directly from Chrome storage and popup refresh uses direct tab messaging.
+9. Popup exists: PASS
+   Files: popup.html, popup.js, popup.css
+10. Content script exists: PASS
+    File: content.js
+11. Icons exist: PASS
+    Files: icons/icon16.png, icons/icon32.png, icons/icon48.png, icons/icon128.png

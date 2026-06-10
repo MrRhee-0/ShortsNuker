@@ -121,9 +121,18 @@ small {
   outline-offset: 3px;
 }
 
-.status {
+.popup__footer {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid #232b35;
+}
+
+.status {
   font-size: 12px;
+}
+
+.privacy-note {
+  margin-top: 5px;
+  color: #7f8b99;
+  font-size: 11px;
 }
