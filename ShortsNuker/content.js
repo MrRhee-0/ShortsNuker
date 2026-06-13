@@ -18,6 +18,7 @@
     const SURFACE_THEME_STYLE_ID = "shorts-nuker-surface-theme-style";
     const COUNTS_STYLE_ID = "shorts-nuker-counts-style";
     const COUNT_HIDDEN_ATTR = "data-shorts-nuker-count-hidden";
+    const ENGAGEMENT_SURFACE_HIDDEN_ATTR = "data-shorts-nuker-engagement-hidden";
     const COUNT_ORIGINAL_ARIA_ATTR = "data-shorts-nuker-original-aria-hidden";
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
@@ -85,6 +86,18 @@
         "[aria-description]",
         "[aria-valuetext]"
     ].join(", ");
+    const DIRECT_LIKE_DISLIKE_GROUP_SELECTORS = [
+        "segmented-like-dislike-button-view-model",
+        "ytd-segmented-like-dislike-button-renderer"
+    ];
+    const RATING_CONTROL_SELECTORS = [
+        ...DIRECT_LIKE_DISLIKE_GROUP_SELECTORS,
+        "like-button-view-model",
+        "dislike-button-view-model",
+        "ytd-toggle-button-renderer",
+        "button",
+        "[role=\"button\"]"
+    ];
     const PROTECTED_TEXT_SELECTORS = [
         "#content-text",
         "#video-title",
@@ -398,6 +411,8 @@
         style.id = COUNTS_STYLE_ID;
         style.textContent = `
             [${COUNT_HIDDEN_ATTR}="true"],
+            [${ENGAGEMENT_SURFACE_HIDDEN_ATTR}="true"],
+            ${DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(",\n            ")},
             ytd-video-view-count-renderer,
             .view-count,
             span.view-count,
@@ -471,12 +486,30 @@
             && /like-button|like button|\blikes?\b|like this|thumbs up/.test(relationText);
     }
 
+    function hasDislikeControlRelation(element) {
+        const relationText = getAttributeText(element);
+        return /dislike-button|dislike button|\bdislikes?\b|dislike this|thumbs down/.test(relationText);
+    }
+
+    function hasRatingControlRelation(element) {
+        return hasLikeCountRelation(element) || hasDislikeControlRelation(element);
+    }
+
+    function hasProtectedActionRelation(element) {
+        const relationText = getAttributeText(element);
+        return /\b(subscribe|join|share|ask|more|overflow|menu|save|clip|download|thanks|report|remix|comment)\b/.test(relationText);
+    }
+
     function isControlElement(element) {
         if (!element || !element.matches) {
             return false;
         }
 
         return element.matches("button, [role=\"button\"], ytd-toggle-button-renderer, ytd-segmented-like-dislike-button-renderer, segmented-like-dislike-button-view-model, like-button-view-model, dislike-button-view-model");
+    }
+
+    function isInsideCommentActions(element) {
+        return Boolean(element && element.closest && element.closest("ytd-comment-action-buttons-renderer, ytd-comment-engagement-bar, ytd-comment-thread-renderer"));
     }
 
     function closestLikeControl(element) {
@@ -557,10 +590,23 @@
         element.setAttribute("aria-hidden", "true");
     }
 
+    function hideEngagementSurface(element) {
+        if (!element || !element.setAttribute) {
+            return;
+        }
+
+        if (!element.hasAttribute(COUNT_ORIGINAL_ARIA_ATTR)) {
+            element.setAttribute(COUNT_ORIGINAL_ARIA_ATTR, element.getAttribute("aria-hidden") || "");
+        }
+        element.setAttribute(ENGAGEMENT_SURFACE_HIDDEN_ATTR, "true");
+        element.setAttribute("aria-hidden", "true");
+    }
+
     function unhideEngagementCounts(root = document) {
-        queryAllIncludingRoot(root, `[${COUNT_HIDDEN_ATTR}="true"]`).forEach((element) => {
+        queryAllIncludingRoot(root, `[${COUNT_HIDDEN_ATTR}="true"], [${ENGAGEMENT_SURFACE_HIDDEN_ATTR}="true"]`).forEach((element) => {
             const originalAriaHidden = element.getAttribute(COUNT_ORIGINAL_ARIA_ATTR);
             element.removeAttribute(COUNT_HIDDEN_ATTR);
+            element.removeAttribute(ENGAGEMENT_SURFACE_HIDDEN_ATTR);
             element.removeAttribute(COUNT_ORIGINAL_ARIA_ATTR);
 
             if (originalAriaHidden) {
@@ -568,6 +614,63 @@
             } else {
                 element.removeAttribute("aria-hidden");
             }
+        });
+    }
+
+    function hasRatingControlChild(element, predicate) {
+        return queryAllIncludingRoot(element, RATING_CONTROL_SELECTORS.join(", ")).some((control) => {
+            return control !== element && !isInsideCommentActions(control) && predicate(control);
+        });
+    }
+
+    function containsProtectedActionChild(element) {
+        return queryAllIncludingRoot(element, RATING_CONTROL_SELECTORS.join(", ")).some((control) => {
+            return control !== element && hasProtectedActionRelation(control);
+        });
+    }
+
+    function findSmallestSafeLikeDislikeGroup(control) {
+        if (!control || !control.closest) {
+            return null;
+        }
+
+        const directGroup = control.closest(DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(", "));
+        if (directGroup && !isInsideCommentActions(directGroup)) {
+            return directGroup;
+        }
+
+        let candidate = control.parentElement;
+        while (candidate && candidate !== document.body) {
+            if (candidate.matches && candidate.matches("ytd-watch-metadata, ytd-menu-renderer, #top-level-buttons-computed, ytd-reel-player-overlay-renderer")) {
+                break;
+            }
+
+            const hasLike = hasRatingControlChild(candidate, hasLikeCountRelation);
+            const hasDislike = hasRatingControlChild(candidate, hasDislikeControlRelation);
+            if (hasLike && hasDislike && !containsProtectedActionChild(candidate)) {
+                return candidate;
+            }
+
+            candidate = candidate.parentElement;
+        }
+
+        return null;
+    }
+
+    function hideLikeDislikeEngagementSurfaces(root = document) {
+        queryAllIncludingRoot(root, DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(", ")).forEach((group) => {
+            if (!isInsideCommentActions(group)) {
+                hideEngagementSurface(group);
+            }
+        });
+
+        queryAllIncludingRoot(root, RATING_CONTROL_SELECTORS.join(", ")).forEach((control) => {
+            if (isInsideCommentActions(control) || !hasRatingControlRelation(control) || hasProtectedActionRelation(control)) {
+                return;
+            }
+
+            const group = findSmallestSafeLikeDislikeGroup(control);
+            hideEngagementSurface(group || control);
         });
     }
 
@@ -602,6 +705,7 @@
         installCountsStyle();
         hideCountTextCandidates(root);
         hideCountsInsideRelatedControls(root);
+        hideLikeDislikeEngagementSurfaces(root);
     }
 
     function removeDirectShorts(root = document) {

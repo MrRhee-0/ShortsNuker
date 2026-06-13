@@ -10,7 +10,7 @@ ShortsNuker v1.0.0 is the first public release package for the YouTube-only Chro
 * Strict Search Title Match for YouTube search results.
 * Theme Color Test for visible user-controlled styling.
 * Theme Surface Test for visible masthead, search box, sidebar, card, comment, metadata, button, icon, and chip styling where targetable.
-* Hide views and likes for visible YouTube view-count and like-count surfaces.
+* Hide views and likes for visible YouTube view-count, like-count, and like-dislike engagement group surfaces.
 * Popup toggles for all features.
 * Persistent settings through Chrome extension storage.
 * Extension icons.
@@ -33,7 +33,7 @@ ShortsNuker does not collect personal data, does not use analytics or telemetry,
 * YouTube layout changes may require selector updates.
 * Theme Color Test is a simple proof-of-capability visual test.
 * Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.
-* Hide views and likes uses YouTube DOM/CSS selectors and conservative text/ARIA relation checks. New count surfaces may require selector updates.
+* Hide views and likes uses YouTube DOM/CSS selectors and conservative text/ARIA relation checks. New count or like-dislike action group surfaces may require selector updates.
 
 ## Verification Checklist
 

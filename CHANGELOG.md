@@ -13,7 +13,7 @@ The format is based on Keep a Changelog, and this project uses public release ve
 * Popup controls for all current features.
 * Theme Color Test proof-of-capability visual styling.
 * Theme Surface Test for stronger YouTube interface surface styling.
-* Hide views and likes toggle for view-count and like-count surfaces.
+* Hide views and likes toggle for view-count, like-count, and like-dislike engagement group surfaces.
 * Persistent toggle settings through Chrome extension storage.
 * Extension icon support with 16, 32, 48, and 128 pixel PNG assets.
 * Public release packaging docs and verification manifests.
