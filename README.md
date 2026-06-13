@@ -8,6 +8,7 @@ A YouTube-only Chrome extension for removing Shorts, enforcing strict title-quer
 * Strict Search Title Match
 * Theme Color Test
 * Theme Surface Test
+* Hide views and likes
 * Popup toggles
 * Persistent settings
 
@@ -36,6 +37,7 @@ Screenshots can be added later to show the popup controls, icon, and YouTube pag
 * Strict Search Title Match: removes YouTube search results whose titles share zero exact normalized words with the current search query.
 * Theme Color Test: applies a simple background-color proof of styling capability.
 * Theme Surface Test: applies a stronger interface skin to YouTube surfaces such as the masthead, search box, sidebar, cards, comments, metadata, buttons, icons, and chips where targetable.
+* Hide views and likes: hides visible YouTube view-count and like-count text while preserving buttons, titles, thumbnails, comments, channel names, upload dates, and normal navigation.
 
 If Theme Color Test and Theme Surface Test are both enabled, Theme Surface Test may visually override the simpler background-color layer because it targets more specific YouTube surfaces.
 
@@ -69,6 +71,7 @@ ShortsNuker is intentionally content-script and popup based. It does not current
 * YouTube layout changes may require selector updates.
 * Theme Color Test is currently a simple proof-of-capability feature.
 * Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.
+* Hide views and likes uses layered YouTube selectors plus conservative text and ARIA relation checks. New YouTube DOM structures may require selector updates.
 
 ## Development Notes
 

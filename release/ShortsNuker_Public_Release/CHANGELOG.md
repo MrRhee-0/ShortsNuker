@@ -11,5 +11,6 @@ All notable changes to this project are documented in this file.
 * Popup controls.
 * Theme Color Test.
 * Theme Surface Test.
+* Hide views and likes.
 * Icon support.
 * Public release packaging.

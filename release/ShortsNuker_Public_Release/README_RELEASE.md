@@ -8,10 +8,13 @@ ShortsNuker v1.0.0 is a YouTube-only Chrome Manifest V3 extension for removing S
 * Strict Search Title Match.
 * Theme Color Test.
 * Theme Surface Test.
+* Hide views and likes.
 * Popup toggles.
 * Persistent settings.
 
 Theme Surface Test applies a stronger visual skin to nested YouTube interface surfaces where targetable. If both theme tests are enabled, Theme Surface Test may override the simpler Theme Color Test layer.
+
+Hide views and likes hides visible view-count and like-count text while preserving YouTube buttons, titles, thumbnails, comments, and normal navigation.
 
 ## Service Worker Status
 

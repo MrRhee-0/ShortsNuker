@@ -5,7 +5,8 @@
         removeShorts: true,
         strictSearchTitleMatch: true,
         themeColorTest: false,
-        themeSurfaceTest: false
+        themeSurfaceTest: false,
+        hideViewsAndLikes: false
     };
     const CONTROL_IDS = Object.keys(DEFAULT_SETTINGS);
     const status = document.getElementById("status");

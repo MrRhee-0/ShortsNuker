@@ -10,11 +10,15 @@
         removeShorts: true,
         strictSearchTitleMatch: true,
         themeColorTest: false,
-        themeSurfaceTest: false
+        themeSurfaceTest: false,
+        hideViewsAndLikes: false
     };
     const SHORTS_STYLE_ID = "shorts-nuker-style";
     const THEME_STYLE_ID = "shorts-nuker-theme-style";
     const SURFACE_THEME_STYLE_ID = "shorts-nuker-surface-theme-style";
+    const COUNTS_STYLE_ID = "shorts-nuker-counts-style";
+    const COUNT_HIDDEN_ATTR = "data-shorts-nuker-count-hidden";
+    const COUNT_ORIGINAL_ARIA_ATTR = "data-shorts-nuker-original-aria-hidden";
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
         "ytd-rich-shelf-renderer[is-shorts]",
@@ -49,6 +53,50 @@
         "ytd-rich-grid-media",
         "yt-lockup-view-model"
     ];
+    const COUNT_TEXT_CANDIDATE_SELECTORS = [
+        "#metadata-line span",
+        "ytd-video-meta-block span",
+        "ytd-video-view-count-renderer",
+        ".view-count",
+        "span.view-count",
+        "yt-formatted-string.view-count",
+        "#count .view-count",
+        "#info .view-count",
+        "#info-container .view-count",
+        "#vote-count-middle",
+        "ytd-comment-action-buttons-renderer #vote-count-middle",
+        "ytd-comment-engagement-bar #vote-count-middle",
+        "ytd-toggle-button-renderer #text",
+        "ytd-segmented-like-dislike-button-renderer #text",
+        "segmented-like-dislike-button-view-model #text",
+        "like-button-view-model #text",
+        "dislike-button-view-model #text",
+        "ytd-reel-player-overlay-renderer #text",
+        "ytd-reel-player-overlay-renderer span",
+        "button span",
+        "[role=\"button\"] span",
+        "yt-formatted-string",
+        "span"
+    ];
+    const COUNT_RELATION_SELECTOR = [
+        "[aria-label]",
+        "[title]",
+        "[data-tooltip-text]",
+        "[aria-description]",
+        "[aria-valuetext]"
+    ].join(", ");
+    const PROTECTED_TEXT_SELECTORS = [
+        "#content-text",
+        "#video-title",
+        "a#video-title",
+        "h1",
+        "h2",
+        "h3",
+        "#channel-name",
+        "ytd-channel-name",
+        "#owner",
+        "#playlist-title"
+    ].join(", ");
 
     let currentSettings = { ...DEFAULT_SETTINGS };
     let observerStarted = false;
@@ -341,10 +389,219 @@
         removeStyleById(SURFACE_THEME_STYLE_ID);
     }
 
+    function installCountsStyle() {
+        if (document.getElementById(COUNTS_STYLE_ID)) {
+            return;
+        }
+
+        const style = document.createElement("style");
+        style.id = COUNTS_STYLE_ID;
+        style.textContent = `
+            [${COUNT_HIDDEN_ATTR}="true"],
+            ytd-video-view-count-renderer,
+            .view-count,
+            span.view-count,
+            yt-formatted-string.view-count,
+            #count .view-count,
+            #info .view-count,
+            #info-container .view-count,
+            ytd-comment-action-buttons-renderer #vote-count-middle,
+            ytd-comment-engagement-bar #vote-count-middle {
+                display: none !important;
+            }
+        `;
+        document.documentElement.appendChild(style);
+    }
+
+    function removeCountsStyle() {
+        removeStyleById(COUNTS_STYLE_ID);
+    }
+
     function removeElement(element) {
         if (element && element.parentNode) {
             element.remove();
         }
+    }
+
+    function normalizeInlineText(text) {
+        return String(text || "").replace(/\s+/g, " ").trim();
+    }
+
+    function getElementText(element) {
+        return normalizeInlineText(element ? element.textContent : "");
+    }
+
+    function getAttributeText(element) {
+        if (!element || !element.getAttribute) {
+            return "";
+        }
+
+        return [
+            element.tagName,
+            element.id,
+            element.getAttribute("class"),
+            element.getAttribute("aria-label"),
+            element.getAttribute("title"),
+            element.getAttribute("data-tooltip-text"),
+            element.getAttribute("aria-description"),
+            element.getAttribute("aria-valuetext")
+        ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function hasViewCountText(text) {
+        return /(^|\b)(no views?|[\d.,]+(?:\s*[kmgtb])?\s+(?:views?|watching)(?:\s+now)?|[\d.,]+\s+(?:thousand|million|billion)\s+views?)\b/i.test(text);
+    }
+
+    function hasLikeCountText(text) {
+        return /(^|\b)([\d.,]+(?:\s*[kmgtb])?\s+likes?|likes?\s+[\d.,]+(?:\s*[kmgtb])?)\b/i.test(text);
+    }
+
+    function isCompactCountText(text) {
+        return /^(?:[\d.,]+(?:\s*[kmgtb])?|no)$/i.test(text);
+    }
+
+    function hasViewCountRelation(element) {
+        const relationText = getAttributeText(element);
+        return /view-count|view count|\bviews?\b|\bwatching\b/.test(relationText);
+    }
+
+    function hasLikeCountRelation(element) {
+        const relationText = getAttributeText(element);
+        return !/\bdislike\b/.test(relationText)
+            && /like-button|like button|\blikes?\b|like this|thumbs up/.test(relationText);
+    }
+
+    function isControlElement(element) {
+        if (!element || !element.matches) {
+            return false;
+        }
+
+        return element.matches("button, [role=\"button\"], ytd-toggle-button-renderer, ytd-segmented-like-dislike-button-renderer, segmented-like-dislike-button-view-model, like-button-view-model, dislike-button-view-model");
+    }
+
+    function closestLikeControl(element) {
+        if (!element || !element.closest) {
+            return null;
+        }
+
+        const control = element.closest("button, [role=\"button\"], ytd-toggle-button-renderer, ytd-segmented-like-dislike-button-renderer, segmented-like-dislike-button-view-model, like-button-view-model, ytd-comment-action-buttons-renderer, ytd-reel-player-overlay-renderer");
+        if (!control) {
+            return null;
+        }
+
+        if (control.matches && control.matches("ytd-comment-action-buttons-renderer")) {
+            return control;
+        }
+
+        return hasLikeCountRelation(control) ? control : null;
+    }
+
+    function closestViewCountSurface(element) {
+        if (!element || !element.closest) {
+            return null;
+        }
+
+        return element.closest("ytd-video-view-count-renderer, ytd-video-meta-block, #metadata-line, #count, #info, #info-container, ytd-reel-player-overlay-renderer");
+    }
+
+    function isProtectedTextSurface(element) {
+        if (!element || !element.closest) {
+            return false;
+        }
+
+        if (element.id === "vote-count-middle" || hasViewCountRelation(element) || hasLikeCountRelation(element)) {
+            return false;
+        }
+
+        return Boolean(element.closest(PROTECTED_TEXT_SELECTORS));
+    }
+
+    function isCountTextElement(element) {
+        const text = getElementText(element);
+        if (!text || isProtectedTextSurface(element)) {
+            return false;
+        }
+
+        if (hasViewCountText(text) || hasLikeCountText(text)) {
+            return true;
+        }
+
+        if (hasViewCountRelation(element) && (isCompactCountText(text) || text.length <= 24)) {
+            return true;
+        }
+
+        if (hasLikeCountRelation(element) && isCompactCountText(text)) {
+            return true;
+        }
+
+        if (element.id === "vote-count-middle" && isCompactCountText(text)) {
+            return true;
+        }
+
+        if (closestLikeControl(element) && isCompactCountText(text)) {
+            return true;
+        }
+
+        return Boolean(closestViewCountSurface(element) && hasViewCountText(text));
+    }
+
+    function hideCountElement(element) {
+        if (!element || !element.setAttribute || isControlElement(element)) {
+            return;
+        }
+
+        if (!element.hasAttribute(COUNT_ORIGINAL_ARIA_ATTR)) {
+            element.setAttribute(COUNT_ORIGINAL_ARIA_ATTR, element.getAttribute("aria-hidden") || "");
+        }
+        element.setAttribute(COUNT_HIDDEN_ATTR, "true");
+        element.setAttribute("aria-hidden", "true");
+    }
+
+    function unhideEngagementCounts(root = document) {
+        queryAllIncludingRoot(root, `[${COUNT_HIDDEN_ATTR}="true"]`).forEach((element) => {
+            const originalAriaHidden = element.getAttribute(COUNT_ORIGINAL_ARIA_ATTR);
+            element.removeAttribute(COUNT_HIDDEN_ATTR);
+            element.removeAttribute(COUNT_ORIGINAL_ARIA_ATTR);
+
+            if (originalAriaHidden) {
+                element.setAttribute("aria-hidden", originalAriaHidden);
+            } else {
+                element.removeAttribute("aria-hidden");
+            }
+        });
+    }
+
+    function hideCountTextCandidates(root = document) {
+        queryAllIncludingRoot(root, COUNT_TEXT_CANDIDATE_SELECTORS.join(", ")).forEach((element) => {
+            if (isCountTextElement(element)) {
+                hideCountElement(element);
+            }
+        });
+    }
+
+    function hideCountsInsideRelatedControls(root = document) {
+        queryAllIncludingRoot(root, COUNT_RELATION_SELECTOR).forEach((element) => {
+            if (!hasViewCountRelation(element) && !hasLikeCountRelation(element)) {
+                return;
+            }
+
+            if (!isControlElement(element) && isCountTextElement(element)) {
+                hideCountElement(element);
+                return;
+            }
+
+            queryAllIncludingRoot(element, "span, yt-formatted-string, #text, #label, #vote-count-middle").forEach((child) => {
+                if (child !== element && isCountTextElement(child)) {
+                    hideCountElement(child);
+                }
+            });
+        });
+    }
+
+    function hideEngagementCounts(root = document) {
+        installCountsStyle();
+        hideCountTextCandidates(root);
+        hideCountsInsideRelatedControls(root);
     }
 
     function removeDirectShorts(root = document) {
@@ -421,6 +678,13 @@
             installSurfaceThemeStyle();
         } else {
             removeSurfaceThemeStyle();
+        }
+
+        if (currentSettings.hideViewsAndLikes) {
+            hideEngagementCounts(root);
+        } else {
+            removeCountsStyle();
+            unhideEngagementCounts();
         }
     }
 
