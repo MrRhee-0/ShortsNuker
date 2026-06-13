@@ -22,7 +22,7 @@ Click the extension icon to open the ShortsNuker popup.
 * Strict Search Title Match: turns strict YouTube search result title filtering on or off.
 * Theme Color Test: turns the simple background color test on or off.
 * Theme Surface Test: turns stronger masthead, search box, sidebar, card, comment, metadata, button, icon, and chip styling on or off.
-* Hide views and likes: turns view-count, like-count, and watch/Shorts like-dislike engagement group hiding on or off.
+* Hide views and likes: turns visible view-count and like-count text hiding on or off while preserving Like and Dislike controls.
 
 Settings persist through Chrome extension storage. Default states are Remove Shorts on, Strict Search Title Match on, Theme Color Test off, Theme Surface Test off, and Hide views and likes off.
 
@@ -63,4 +63,4 @@ The Theme Color Test is currently a simple visual test only.
 
 Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.
 
-Hide views and likes uses YouTube DOM/CSS selectors plus conservative text and ARIA relation checks. New YouTube count or like-dislike action group surfaces may require selector updates.
+Hide views and likes uses YouTube DOM/CSS selectors plus conservative text and ARIA relation checks. New YouTube count text surfaces may require selector updates.

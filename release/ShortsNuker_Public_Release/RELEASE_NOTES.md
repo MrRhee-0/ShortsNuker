@@ -8,7 +8,7 @@ ShortsNuker v1.0.0 packages the current YouTube-only Manifest V3 extension for p
 * Strict Search Title Match.
 * Theme Color Test.
 * Theme Surface Test.
-* Hide views and likes, including watch/Shorts like-dislike engagement group hiding.
+* Hide views and likes for visible view-count and like-count text while preserving Like and Dislike controls.
 * Popup toggles.
 * Persistent settings.
 
@@ -25,4 +25,4 @@ No analytics, telemetry, tracking, external servers, browsing history collection
 * YouTube layout changes may require selector updates.
 * Theme Color Test is a proof-of-capability feature.
 * Theme Surface Test uses YouTube DOM/CSS selectors. YouTube layout changes may require selector updates.
-* Hide views and likes uses YouTube DOM/CSS selectors and conservative text/ARIA relation checks. New count or like-dislike action group surfaces may require selector updates.
+* Hide views and likes uses YouTube DOM/CSS selectors and conservative text/ARIA relation checks. New count text surfaces may require selector updates.

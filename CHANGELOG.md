@@ -13,7 +13,7 @@ The format is based on Keep a Changelog, and this project uses public release ve
 * Popup controls for all current features.
 * Theme Color Test proof-of-capability visual styling.
 * Theme Surface Test for stronger YouTube interface surface styling.
-* Hide views and likes toggle for view-count, like-count, and like-dislike engagement group surfaces.
+* Hide views and likes toggle for visible view-count and like-count text surfaces.
 * Persistent toggle settings through Chrome extension storage.
 * Extension icon support with 16, 32, 48, and 128 pixel PNG assets.
 * Public release packaging docs and verification manifests.
@@ -22,3 +22,9 @@ The format is based on Keep a Changelog, and this project uses public release ve
 
 * No analytics, telemetry, tracking, remote logging, or external server calls.
 * Scope remains limited to YouTube pages.
+
+### Fixed
+
+* Hide views and likes now preserves the Like and Dislike buttons and hides only visible count text.
+* Mutation handling now debounces added-node scans instead of scanning the full document after every YouTube DOM update.
+* Content-script Chrome API calls now stop cleanly when an old extension context is invalidated.

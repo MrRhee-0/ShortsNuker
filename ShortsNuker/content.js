@@ -18,8 +18,9 @@
     const SURFACE_THEME_STYLE_ID = "shorts-nuker-surface-theme-style";
     const COUNTS_STYLE_ID = "shorts-nuker-counts-style";
     const COUNT_HIDDEN_ATTR = "data-shorts-nuker-count-hidden";
-    const ENGAGEMENT_SURFACE_HIDDEN_ATTR = "data-shorts-nuker-engagement-hidden";
+    const COUNT_SCANNED_ATTR = "data-shorts-nuker-count-scanned";
     const COUNT_ORIGINAL_ARIA_ATTR = "data-shorts-nuker-original-aria-hidden";
+    const MUTATION_SCAN_DEBOUNCE_MS = 120;
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
         "ytd-rich-shelf-renderer[is-shorts]",
@@ -73,12 +74,15 @@
         "like-button-view-model #text",
         "dislike-button-view-model #text",
         "ytd-reel-player-overlay-renderer #text",
-        "ytd-reel-player-overlay-renderer span",
-        "button span",
-        "[role=\"button\"] span",
-        "yt-formatted-string",
-        "span"
+        "ytd-reel-player-overlay-renderer span"
     ];
+    const RELATED_COUNT_CHILD_SELECTORS = [
+        "span",
+        "yt-formatted-string",
+        "#text",
+        "#label",
+        "#vote-count-middle"
+    ].join(", ");
     const COUNT_RELATION_SELECTOR = [
         "[aria-label]",
         "[title]",
@@ -86,18 +90,15 @@
         "[aria-description]",
         "[aria-valuetext]"
     ].join(", ");
-    const DIRECT_LIKE_DISLIKE_GROUP_SELECTORS = [
-        "segmented-like-dislike-button-view-model",
-        "ytd-segmented-like-dislike-button-renderer"
-    ];
-    const RATING_CONTROL_SELECTORS = [
-        ...DIRECT_LIKE_DISLIKE_GROUP_SELECTORS,
-        "like-button-view-model",
-        "dislike-button-view-model",
-        "ytd-toggle-button-renderer",
+    const CONTROL_CONTAINER_SELECTORS = [
         "button",
-        "[role=\"button\"]"
-    ];
+        "[role=\"button\"]",
+        "ytd-toggle-button-renderer",
+        "ytd-segmented-like-dislike-button-renderer",
+        "segmented-like-dislike-button-view-model",
+        "like-button-view-model",
+        "dislike-button-view-model"
+    ].join(", ");
     const PROTECTED_TEXT_SELECTORS = [
         "#content-text",
         "#video-title",
@@ -113,27 +114,116 @@
 
     let currentSettings = { ...DEFAULT_SETTINGS };
     let observerStarted = false;
+    let domObserver = null;
+    let pendingScanTimer = null;
+    let pendingScanRoots = new Set();
+    let extensionContextInvalidated = false;
+    let messageHandlersInstalled = false;
+
+    function isExtensionContextInvalidatedError(error) {
+        const message = String((error && error.message) || error || "");
+        return /extension context invalidated/i.test(message);
+    }
+
+    function markExtensionContextInvalidated() {
+        if (extensionContextInvalidated) {
+            return;
+        }
+
+        extensionContextInvalidated = true;
+        cleanupExtensionInstance();
+    }
+
+    function isChromeRuntimeAvailable() {
+        if (extensionContextInvalidated) {
+            return false;
+        }
+
+        try {
+            return typeof chrome !== "undefined" && Boolean(chrome.runtime && chrome.runtime.id);
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+            return false;
+        }
+    }
+
+    function getChromeLastError() {
+        try {
+            if (typeof chrome !== "undefined" && chrome.runtime) {
+                return chrome.runtime.lastError || null;
+            }
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+            return error;
+        }
+
+        return null;
+    }
 
     function getStorageArea() {
-        if (typeof chrome === "undefined" || !chrome.storage) {
+        if (!isChromeRuntimeAvailable()) {
             return null;
         }
 
-        return chrome.storage.sync || chrome.storage.local || null;
+        try {
+            if (!chrome.storage) {
+                return null;
+            }
+
+            return chrome.storage.sync || chrome.storage.local || null;
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+            return null;
+        }
     }
 
     function loadSettings() {
         const storageArea = getStorageArea();
         if (!storageArea) {
+            if (extensionContextInvalidated) {
+                return Promise.resolve(null);
+            }
+
             currentSettings = { ...DEFAULT_SETTINGS };
             return Promise.resolve(currentSettings);
         }
 
         return new Promise((resolve) => {
-            storageArea.get(DEFAULT_SETTINGS, (storedSettings) => {
-                currentSettings = { ...DEFAULT_SETTINGS, ...storedSettings };
+            try {
+                storageArea.get(DEFAULT_SETTINGS, (storedSettings) => {
+                    const lastError = getChromeLastError();
+                    if (lastError) {
+                        if (isExtensionContextInvalidatedError(lastError)) {
+                            markExtensionContextInvalidated();
+                        }
+                        resolve(null);
+                        return;
+                    }
+
+                    if (extensionContextInvalidated) {
+                        resolve(null);
+                        return;
+                    }
+
+                    currentSettings = { ...DEFAULT_SETTINGS, ...storedSettings };
+                    resolve(currentSettings);
+                });
+            } catch (error) {
+                if (isExtensionContextInvalidatedError(error)) {
+                    markExtensionContextInvalidated();
+                    resolve(null);
+                    return;
+                }
+
+                currentSettings = { ...DEFAULT_SETTINGS };
                 resolve(currentSettings);
-            });
+            }
         });
     }
 
@@ -411,8 +501,6 @@
         style.id = COUNTS_STYLE_ID;
         style.textContent = `
             [${COUNT_HIDDEN_ATTR}="true"],
-            [${ENGAGEMENT_SURFACE_HIDDEN_ATTR}="true"],
-            ${DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(",\n            ")},
             ytd-video-view-count-renderer,
             .view-count,
             span.view-count,
@@ -486,30 +574,12 @@
             && /like-button|like button|\blikes?\b|like this|thumbs up/.test(relationText);
     }
 
-    function hasDislikeControlRelation(element) {
-        const relationText = getAttributeText(element);
-        return /dislike-button|dislike button|\bdislikes?\b|dislike this|thumbs down/.test(relationText);
-    }
-
-    function hasRatingControlRelation(element) {
-        return hasLikeCountRelation(element) || hasDislikeControlRelation(element);
-    }
-
-    function hasProtectedActionRelation(element) {
-        const relationText = getAttributeText(element);
-        return /\b(subscribe|join|share|ask|more|overflow|menu|save|clip|download|thanks|report|remix|comment)\b/.test(relationText);
-    }
-
     function isControlElement(element) {
         if (!element || !element.matches) {
             return false;
         }
 
-        return element.matches("button, [role=\"button\"], ytd-toggle-button-renderer, ytd-segmented-like-dislike-button-renderer, segmented-like-dislike-button-view-model, like-button-view-model, dislike-button-view-model");
-    }
-
-    function isInsideCommentActions(element) {
-        return Boolean(element && element.closest && element.closest("ytd-comment-action-buttons-renderer, ytd-comment-engagement-bar, ytd-comment-thread-renderer"));
+        return element.matches(CONTROL_CONTAINER_SELECTORS);
     }
 
     function closestLikeControl(element) {
@@ -583,30 +653,23 @@
             return;
         }
 
-        if (!element.hasAttribute(COUNT_ORIGINAL_ARIA_ATTR)) {
-            element.setAttribute(COUNT_ORIGINAL_ARIA_ATTR, element.getAttribute("aria-hidden") || "");
-        }
-        element.setAttribute(COUNT_HIDDEN_ATTR, "true");
-        element.setAttribute("aria-hidden", "true");
-    }
-
-    function hideEngagementSurface(element) {
-        if (!element || !element.setAttribute) {
+        if (element.getAttribute(COUNT_HIDDEN_ATTR) === "true") {
             return;
         }
 
         if (!element.hasAttribute(COUNT_ORIGINAL_ARIA_ATTR)) {
             element.setAttribute(COUNT_ORIGINAL_ARIA_ATTR, element.getAttribute("aria-hidden") || "");
         }
-        element.setAttribute(ENGAGEMENT_SURFACE_HIDDEN_ATTR, "true");
+        element.setAttribute(COUNT_SCANNED_ATTR, "true");
+        element.setAttribute(COUNT_HIDDEN_ATTR, "true");
         element.setAttribute("aria-hidden", "true");
     }
 
     function unhideEngagementCounts(root = document) {
-        queryAllIncludingRoot(root, `[${COUNT_HIDDEN_ATTR}="true"], [${ENGAGEMENT_SURFACE_HIDDEN_ATTR}="true"]`).forEach((element) => {
+        queryAllIncludingRoot(root, `[${COUNT_HIDDEN_ATTR}="true"]`).forEach((element) => {
             const originalAriaHidden = element.getAttribute(COUNT_ORIGINAL_ARIA_ATTR);
             element.removeAttribute(COUNT_HIDDEN_ATTR);
-            element.removeAttribute(ENGAGEMENT_SURFACE_HIDDEN_ATTR);
+            element.removeAttribute(COUNT_SCANNED_ATTR);
             element.removeAttribute(COUNT_ORIGINAL_ARIA_ATTR);
 
             if (originalAriaHidden) {
@@ -614,63 +677,6 @@
             } else {
                 element.removeAttribute("aria-hidden");
             }
-        });
-    }
-
-    function hasRatingControlChild(element, predicate) {
-        return queryAllIncludingRoot(element, RATING_CONTROL_SELECTORS.join(", ")).some((control) => {
-            return control !== element && !isInsideCommentActions(control) && predicate(control);
-        });
-    }
-
-    function containsProtectedActionChild(element) {
-        return queryAllIncludingRoot(element, RATING_CONTROL_SELECTORS.join(", ")).some((control) => {
-            return control !== element && hasProtectedActionRelation(control);
-        });
-    }
-
-    function findSmallestSafeLikeDislikeGroup(control) {
-        if (!control || !control.closest) {
-            return null;
-        }
-
-        const directGroup = control.closest(DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(", "));
-        if (directGroup && !isInsideCommentActions(directGroup)) {
-            return directGroup;
-        }
-
-        let candidate = control.parentElement;
-        while (candidate && candidate !== document.body) {
-            if (candidate.matches && candidate.matches("ytd-watch-metadata, ytd-menu-renderer, #top-level-buttons-computed, ytd-reel-player-overlay-renderer")) {
-                break;
-            }
-
-            const hasLike = hasRatingControlChild(candidate, hasLikeCountRelation);
-            const hasDislike = hasRatingControlChild(candidate, hasDislikeControlRelation);
-            if (hasLike && hasDislike && !containsProtectedActionChild(candidate)) {
-                return candidate;
-            }
-
-            candidate = candidate.parentElement;
-        }
-
-        return null;
-    }
-
-    function hideLikeDislikeEngagementSurfaces(root = document) {
-        queryAllIncludingRoot(root, DIRECT_LIKE_DISLIKE_GROUP_SELECTORS.join(", ")).forEach((group) => {
-            if (!isInsideCommentActions(group)) {
-                hideEngagementSurface(group);
-            }
-        });
-
-        queryAllIncludingRoot(root, RATING_CONTROL_SELECTORS.join(", ")).forEach((control) => {
-            if (isInsideCommentActions(control) || !hasRatingControlRelation(control) || hasProtectedActionRelation(control)) {
-                return;
-            }
-
-            const group = findSmallestSafeLikeDislikeGroup(control);
-            hideEngagementSurface(group || control);
         });
     }
 
@@ -693,7 +699,7 @@
                 return;
             }
 
-            queryAllIncludingRoot(element, "span, yt-formatted-string, #text, #label, #vote-count-middle").forEach((child) => {
+            queryAllIncludingRoot(element, RELATED_COUNT_CHILD_SELECTORS).forEach((child) => {
                 if (child !== element && isCountTextElement(child)) {
                     hideCountElement(child);
                 }
@@ -705,7 +711,6 @@
         installCountsStyle();
         hideCountTextCandidates(root);
         hideCountsInsideRelatedControls(root);
-        hideLikeDislikeEngagementSurfaces(root);
     }
 
     function removeDirectShorts(root = document) {
@@ -760,6 +765,10 @@
     }
 
     function applyEnabledFeatures(root = document) {
+        if (extensionContextInvalidated) {
+            return false;
+        }
+
         if (currentSettings.removeShorts) {
             installShortsStyle();
             removeDirectShorts(root);
@@ -786,79 +795,193 @@
 
         if (currentSettings.hideViewsAndLikes) {
             hideEngagementCounts(root);
-        } else {
+        } else if (document.getElementById(COUNTS_STYLE_ID)) {
             removeCountsStyle();
             unhideEngagementCounts();
         }
+
+        return true;
     }
 
     function refreshFeatures(root = document) {
-        return loadSettings().then(() => {
-            applyEnabledFeatures(root);
+        if (extensionContextInvalidated) {
+            return Promise.resolve(false);
+        }
+
+        return loadSettings().then((settings) => {
+            if (!settings || extensionContextInvalidated) {
+                return false;
+            }
+
+            return applyEnabledFeatures(root);
+        }).catch((error) => {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+            return false;
         });
     }
 
+    function cleanupExtensionInstance() {
+        if (pendingScanTimer) {
+            window.clearTimeout(pendingScanTimer);
+            pendingScanTimer = null;
+        }
+
+        pendingScanRoots.clear();
+
+        if (domObserver) {
+            domObserver.disconnect();
+            domObserver = null;
+        }
+
+        observerStarted = false;
+    }
+
+    function shouldScanRoot(root) {
+        if (!root) {
+            return false;
+        }
+
+        if (root === document || root === document.body || root === document.documentElement) {
+            return true;
+        }
+
+        return root.nodeType === Node.ELEMENT_NODE && document.documentElement.contains(root);
+    }
+
+    function flushScheduledFeatureApplication() {
+        pendingScanTimer = null;
+
+        if (extensionContextInvalidated) {
+            cleanupExtensionInstance();
+            return;
+        }
+
+        const roots = Array.from(pendingScanRoots);
+        pendingScanRoots.clear();
+
+        roots.forEach((root) => {
+            if (shouldScanRoot(root)) {
+                applyEnabledFeatures(root);
+            }
+        });
+    }
+
+    function scheduleFeatureApplication(root = document) {
+        if (extensionContextInvalidated || !shouldScanRoot(root)) {
+            return;
+        }
+
+        pendingScanRoots.add(root);
+
+        if (pendingScanTimer) {
+            return;
+        }
+
+        pendingScanTimer = window.setTimeout(flushScheduledFeatureApplication, MUTATION_SCAN_DEBOUNCE_MS);
+    }
+
     function startObserver() {
-        if (observerStarted) {
+        if (observerStarted || extensionContextInvalidated || !document.body) {
             return;
         }
         observerStarted = true;
 
-        const observer = new MutationObserver((mutations) => {
+        domObserver = new MutationObserver((mutations) => {
+            if (extensionContextInvalidated) {
+                cleanupExtensionInstance();
+                return;
+            }
+
             mutations.forEach((mutation) => {
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        applyEnabledFeatures(node);
+                        scheduleFeatureApplication(node);
                     }
                 });
             });
-
-            applyEnabledFeatures();
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        domObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function safeSendResponse(sendResponse, response) {
+        try {
+            sendResponse(response);
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+        }
     }
 
     function installMessageHandlers() {
-        if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.onMessage) {
+        if (messageHandlersInstalled || !isChromeRuntimeAvailable()) {
             return;
         }
 
-        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            if (!message || message.type !== "refreshFeatures") {
-                return false;
+        try {
+            if (!chrome.runtime.onMessage) {
+                return;
             }
 
-            refreshFeatures().then(() => {
-                sendResponse({ ok: true });
-            });
-            return true;
-        });
-
-        if (chrome.storage && chrome.storage.onChanged) {
-            chrome.storage.onChanged.addListener((changes, areaName) => {
-                if (areaName !== "sync" && areaName !== "local") {
-                    return;
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                if (!message || message.type !== "refreshFeatures") {
+                    return false;
                 }
 
-                Object.keys(DEFAULT_SETTINGS).forEach((key) => {
-                    if (changes[key]) {
-                        currentSettings[key] = changes[key].newValue;
+                refreshFeatures().then((applied) => {
+                    safeSendResponse(sendResponse, { ok: Boolean(applied) });
+                }).catch((error) => {
+                    if (isExtensionContextInvalidatedError(error)) {
+                        markExtensionContextInvalidated();
                     }
+                    safeSendResponse(sendResponse, { ok: false });
                 });
-                applyEnabledFeatures();
+                return true;
             });
+
+            messageHandlersInstalled = true;
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
+            return;
+        }
+
+        try {
+            if (chrome.storage && chrome.storage.onChanged) {
+                chrome.storage.onChanged.addListener((changes, areaName) => {
+                    if (areaName !== "sync" && areaName !== "local") {
+                        return;
+                    }
+
+                    Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+                        if (changes[key]) {
+                            currentSettings[key] = changes[key].newValue;
+                        }
+                    });
+                    scheduleFeatureApplication(document);
+                });
+            }
+        } catch (error) {
+            if (isExtensionContextInvalidatedError(error)) {
+                markExtensionContextInvalidated();
+            }
         }
     }
 
     function initialize() {
-        if (!document.body) {
+        if (!document.body || extensionContextInvalidated) {
             return;
         }
 
         installMessageHandlers();
-        refreshFeatures().then(() => {
-            startObserver();
+        refreshFeatures().then((applied) => {
+            if (applied !== false) {
+                startObserver();
+            }
         });
     }
 
@@ -869,6 +992,8 @@
     }
 
     window.addEventListener("yt-navigate-finish", () => {
-        refreshFeatures();
+        refreshFeatures(document);
     });
+    window.addEventListener("pagehide", cleanupExtensionInstance);
+    window.addEventListener("beforeunload", cleanupExtensionInstance);
 }());
