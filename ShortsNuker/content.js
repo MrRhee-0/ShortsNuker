@@ -20,6 +20,8 @@
     const COUNT_HIDDEN_ATTR = "data-shorts-nuker-count-hidden";
     const COUNT_SCANNED_ATTR = "data-shorts-nuker-count-scanned";
     const COUNT_ORIGINAL_ARIA_ATTR = "data-shorts-nuker-original-aria-hidden";
+    const WATCH_LIKE_PILL_FALLBACK_ATTR = "data-shorts-nuker-watch-like-pill-hidden";
+    const DEBUG = false;
     const MUTATION_SCAN_DEBOUNCE_MS = 120;
     const DIRECT_SHORTS_SELECTORS = [
         "ytd-reel-shelf-renderer",
@@ -74,14 +76,22 @@
         "like-button-view-model #text",
         "dislike-button-view-model #text",
         "ytd-reel-player-overlay-renderer #text",
-        "ytd-reel-player-overlay-renderer span"
+        "ytd-reel-player-overlay-renderer span",
+        ".yt-spec-button-shape-next__button-text-content",
+        ".yt-spec-button-shape-next__button-text-content span",
+        "button span",
+        "[role=\"button\"] span",
+        "yt-formatted-string",
+        "span"
     ];
     const RELATED_COUNT_CHILD_SELECTORS = [
         "span",
         "yt-formatted-string",
         "#text",
         "#label",
-        "#vote-count-middle"
+        "#vote-count-middle",
+        ".yt-spec-button-shape-next__button-text-content",
+        ".yt-spec-button-shape-next__button-text-content span"
     ].join(", ");
     const COUNT_RELATION_SELECTOR = [
         "[aria-label]",
@@ -119,6 +129,13 @@
     let pendingScanRoots = new Set();
     let extensionContextInvalidated = false;
     let messageHandlersInstalled = false;
+    let lastWatchLikeDiagnosticUrl = "";
+
+    function debugLog(...args) {
+        if (DEBUG) {
+            console.debug("[ShortsNuker]", ...args);
+        }
+    }
 
     function isExtensionContextInvalidatedError(error) {
         const message = String((error && error.message) || error || "");
@@ -140,7 +157,13 @@
         }
 
         try {
-            return typeof chrome !== "undefined" && Boolean(chrome.runtime && chrome.runtime.id);
+            if (typeof chrome === "undefined" || !chrome.runtime) {
+                return false;
+            }
+
+            const runtimeId = chrome.runtime.id;
+            debugLog("runtime available", runtimeId || "no runtime id surface");
+            return true;
         } catch (error) {
             if (isExtensionContextInvalidatedError(error)) {
                 markExtensionContextInvalidated();
@@ -165,12 +188,12 @@
     }
 
     function getStorageArea() {
-        if (!isChromeRuntimeAvailable()) {
+        if (extensionContextInvalidated) {
             return null;
         }
 
         try {
-            if (!chrome.storage) {
+            if (typeof chrome === "undefined" || !chrome.storage) {
                 return null;
             }
 
@@ -212,6 +235,7 @@
                     }
 
                     currentSettings = { ...DEFAULT_SETTINGS, ...storedSettings };
+                    debugLog("settings loaded", currentSettings);
                     resolve(currentSettings);
                 });
             } catch (error) {
@@ -501,6 +525,7 @@
         style.id = COUNTS_STYLE_ID;
         style.textContent = `
             [${COUNT_HIDDEN_ATTR}="true"],
+            [${WATCH_LIKE_PILL_FALLBACK_ATTR}="true"],
             ytd-video-view-count-renderer,
             .view-count,
             span.view-count,
@@ -587,16 +612,27 @@
             return null;
         }
 
-        const control = element.closest("button, [role=\"button\"], ytd-toggle-button-renderer, ytd-segmented-like-dislike-button-renderer, segmented-like-dislike-button-view-model, like-button-view-model, ytd-comment-action-buttons-renderer, ytd-reel-player-overlay-renderer");
-        if (!control) {
-            return null;
+        const specificControl = element.closest("like-button-view-model, ytd-toggle-button-renderer, ytd-comment-action-buttons-renderer, ytd-reel-player-overlay-renderer");
+        if (specificControl) {
+            if (specificControl.matches && specificControl.matches("ytd-comment-action-buttons-renderer")) {
+                return specificControl;
+            }
+
+            if (specificControl.matches && specificControl.matches("like-button-view-model")) {
+                return specificControl;
+            }
+
+            if (hasLikeCountRelation(specificControl)) {
+                return specificControl;
+            }
         }
 
-        if (control.matches && control.matches("ytd-comment-action-buttons-renderer")) {
-            return control;
+        const genericControl = element.closest("button, [role=\"button\"]");
+        if (genericControl && hasLikeCountRelation(genericControl)) {
+            return genericControl;
         }
 
-        return hasLikeCountRelation(control) ? control : null;
+        return null;
     }
 
     function closestViewCountSurface(element) {
@@ -605,6 +641,254 @@
         }
 
         return element.closest("ytd-video-view-count-renderer, ytd-video-meta-block, #metadata-line, #count, #info, #info-container, ytd-reel-player-overlay-renderer");
+    }
+
+    function isInsideVideoPlayerSurface(element) {
+        if (!element || !element.closest) {
+            return false;
+        }
+
+        return Boolean(element.closest(".html5-video-player, #movie_player, .ytp-chrome-controls, .ytp-player-content"));
+    }
+
+    function isWatchPage() {
+        try {
+            return location.pathname === "/watch";
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function getWatchMetadata(root = document) {
+        if (!isWatchPage()) {
+            return null;
+        }
+
+        if (root && root.nodeType === Node.ELEMENT_NODE) {
+            if (root.matches && root.matches("ytd-watch-metadata")) {
+                return root;
+            }
+
+            if (root.closest) {
+                const closestMetadata = root.closest("ytd-watch-metadata");
+                if (closestMetadata) {
+                    return closestMetadata;
+                }
+            }
+
+            if (root.querySelector) {
+                return root.querySelector("ytd-watch-metadata") || document.querySelector("ytd-watch-metadata");
+            }
+        }
+
+        return document.querySelector("ytd-watch-metadata");
+    }
+
+    function getWatchActionSurfaces(root = document) {
+        const metadata = getWatchMetadata(root);
+        if (!metadata) {
+            return [];
+        }
+
+        const surfaces = [metadata];
+        metadata.querySelectorAll("#top-level-buttons-computed, ytd-menu-renderer, segmented-like-dislike-button-view-model, ytd-segmented-like-dislike-button-renderer").forEach((surface) => {
+            if (!surfaces.includes(surface)) {
+                surfaces.push(surface);
+            }
+        });
+        return surfaces;
+    }
+
+    function getWatchLikePills(root = document) {
+        const metadata = getWatchMetadata(root);
+        if (!metadata) {
+            return [];
+        }
+
+        return Array.from(metadata.querySelectorAll("segmented-like-dislike-button-view-model, ytd-segmented-like-dislike-button-renderer"))
+            .filter((element) => !isInsideVideoPlayerSurface(element));
+    }
+
+    function isDiagnosticCompactCountText(text) {
+        return /^(?:\d{1,3}(?:[.,]\d+)?|\d+)(?:\s*[kmgtb])?$/i.test(normalizeInlineText(text));
+    }
+
+    function getElementClassName(element) {
+        if (!element) {
+            return "";
+        }
+
+        if (typeof element.className === "string") {
+            return element.className;
+        }
+
+        return element.getAttribute ? element.getAttribute("class") || "" : "";
+    }
+
+    function describeElementBriefly(element) {
+        if (!element || !element.tagName) {
+            return null;
+        }
+
+        return {
+            tagName: element.tagName.toLowerCase(),
+            id: element.id || "",
+            className: getElementClassName(element),
+            ariaLabel: element.getAttribute ? element.getAttribute("aria-label") || "" : "",
+            textContent: normalizeInlineText(element.textContent || "").slice(0, 120)
+        };
+    }
+
+    function getCustomYouTubeComponentChain(element) {
+        const chain = [];
+        let current = element;
+
+        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
+            const tagName = current.tagName ? current.tagName.toLowerCase() : "";
+            if (tagName.includes("-") || tagName.startsWith("yt")) {
+                let label = tagName;
+                if (current.id) {
+                    label += `#${current.id}`;
+                }
+                const className = getElementClassName(current).split(/\s+/).filter(Boolean).slice(0, 3).join(".");
+                if (className) {
+                    label += `.${className}`;
+                }
+                chain.push(label);
+            }
+            current = current.parentElement;
+        }
+
+        return chain.slice(0, 12);
+    }
+
+    function rectToPlainObject(element) {
+        if (!element || !element.getBoundingClientRect) {
+            return null;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            top: Math.round(rect.top),
+            right: Math.round(rect.right),
+            bottom: Math.round(rect.bottom),
+            left: Math.round(rect.left)
+        };
+    }
+
+    function collectCompactCountsFromText(text) {
+        const matches = String(text || "").match(/\b\d{1,3}(?:[.,]\d+)?\s*[kmgtb]?\b|\b\d+\b/gi) || [];
+        return Array.from(new Set(matches.map(normalizeInlineText).filter(isDiagnosticCompactCountText))).slice(0, 50);
+    }
+
+    function describeWatchCountCandidate(element, text, source) {
+        const closestButton = element && element.closest ? element.closest("button, [role=\"button\"]") : null;
+        const closestMetadata = element && element.closest ? element.closest("ytd-watch-metadata") : null;
+        return {
+            source,
+            textContent: text,
+            tagName: element && element.tagName ? element.tagName.toLowerCase() : "",
+            className: getElementClassName(element),
+            id: element && element.id ? element.id : "",
+            customYouTubeComponentChain: getCustomYouTubeComponentChain(element),
+            closestButton: describeElementBriefly(closestButton),
+            hasClosestWatchMetadata: Boolean(closestMetadata),
+            insidePlayerSurface: isInsideVideoPlayerSurface(element),
+            rect: rectToPlainObject(element),
+            outerHTMLSlice: element && element.outerHTML ? element.outerHTML.slice(0, 700) : "",
+            documentBodyInnerTextIncludesCandidate: Boolean(document.body && document.body.innerText && document.body.innerText.includes(text)),
+            watchMetadataInnerTextIncludesCandidate: Boolean(closestMetadata && closestMetadata.innerText && closestMetadata.innerText.includes(text))
+        };
+    }
+
+    function collectWatchLikeDiagnosticCandidates() {
+        const candidates = [];
+        const seen = new Set();
+
+        getWatchActionSurfaces(document).forEach((surface) => {
+            if (!surface || isInsideVideoPlayerSurface(surface)) {
+                return;
+            }
+
+            surface.querySelectorAll("*").forEach((element) => {
+                const text = getElementText(element);
+                if (!text || !isDiagnosticCompactCountText(text)) {
+                    return;
+                }
+
+                const key = `element:${text}:${element.tagName}:${element.id}:${getElementClassName(element)}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    candidates.push(describeWatchCountCandidate(element, text, "element"));
+                }
+            });
+
+            const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    const text = normalizeInlineText(node.nodeValue);
+                    return isDiagnosticCompactCountText(text) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                }
+            });
+
+            let textNode = walker.nextNode();
+            while (textNode) {
+                const element = textNode.parentElement;
+                const text = normalizeInlineText(textNode.nodeValue);
+                const key = `text:${text}:${element && element.tagName}:${element && element.id}:${getElementClassName(element)}`;
+                if (element && !seen.has(key)) {
+                    seen.add(key);
+                    candidates.push(describeWatchCountCandidate(element, text, "text-node"));
+                }
+                textNode = walker.nextNode();
+            }
+        });
+
+        return candidates;
+    }
+
+    function debugWatchPageLikeCountDom(root = document) {
+        if (!DEBUG || !isWatchPage() || root !== document || lastWatchLikeDiagnosticUrl === location.href) {
+            return;
+        }
+
+        const metadata = getWatchMetadata(document);
+        if (!metadata) {
+            return;
+        }
+
+        lastWatchLikeDiagnosticUrl = location.href;
+        const bodyInnerText = document.body && document.body.innerText ? document.body.innerText : "";
+        const metadataInnerText = metadata.innerText || "";
+        console.debug("[ShortsNuker][watch-like-count-diagnostic]", {
+            url: location.href,
+            documentBodyCompactCounts: collectCompactCountsFromText(bodyInnerText),
+            watchMetadataCompactCounts: collectCompactCountsFromText(metadataInnerText),
+            documentBodyInnerTextLength: bodyInnerText.length,
+            watchMetadataInnerTextLength: metadataInnerText.length,
+            candidates: collectWatchLikeDiagnosticCandidates()
+        });
+    }
+
+    function isWatchPageLikeCountElement(element, text) {
+        if (!element || !element.closest || !isCompactCountText(text) || isInsideVideoPlayerSurface(element)) {
+            return false;
+        }
+
+        const watchActionSurface = element.closest("ytd-watch-metadata #top-level-buttons-computed, ytd-watch-metadata ytd-menu-renderer, ytd-watch-metadata segmented-like-dislike-button-view-model, ytd-watch-metadata ytd-segmented-like-dislike-button-renderer");
+        if (!watchActionSurface) {
+            return false;
+        }
+
+        const likeSide = element.closest("like-button-view-model, button, [role=\"button\"]");
+        if (!likeSide || !watchActionSurface.contains(likeSide)) {
+            return false;
+        }
+
+        return (likeSide.matches && likeSide.matches("like-button-view-model")) || hasLikeCountRelation(likeSide);
     }
 
     function isProtectedTextSurface(element) {
@@ -637,6 +921,10 @@
             return true;
         }
 
+        if (isWatchPageLikeCountElement(element, text)) {
+            return true;
+        }
+
         if (element.id === "vote-count-middle" && isCompactCountText(text)) {
             return true;
         }
@@ -650,11 +938,11 @@
 
     function hideCountElement(element) {
         if (!element || !element.setAttribute || isControlElement(element)) {
-            return;
+            return false;
         }
 
         if (element.getAttribute(COUNT_HIDDEN_ATTR) === "true") {
-            return;
+            return false;
         }
 
         if (!element.hasAttribute(COUNT_ORIGINAL_ARIA_ATTR)) {
@@ -663,6 +951,63 @@
         element.setAttribute(COUNT_SCANNED_ATTR, "true");
         element.setAttribute(COUNT_HIDDEN_ATTR, "true");
         element.setAttribute("aria-hidden", "true");
+        return true;
+    }
+
+    function hideReachableWatchPageLikeCountText(root = document) {
+        let hiddenCount = 0;
+
+        getWatchActionSurfaces(root).forEach((surface) => {
+            if (!surface || isInsideVideoPlayerSurface(surface)) {
+                return;
+            }
+
+            const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    const text = normalizeInlineText(node.nodeValue);
+                    if (!isCompactCountText(text)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+
+                    const element = node.parentElement;
+                    return element && isWatchPageLikeCountElement(element, text)
+                        ? NodeFilter.FILTER_ACCEPT
+                        : NodeFilter.FILTER_REJECT;
+                }
+            });
+
+            let textNode = walker.nextNode();
+            while (textNode) {
+                const element = textNode.parentElement;
+                const text = normalizeInlineText(textNode.nodeValue);
+                if (element && getElementText(element) === text) {
+                    if (element.getAttribute(COUNT_HIDDEN_ATTR) === "true" || hideCountElement(element)) {
+                        hiddenCount += 1;
+                    }
+                }
+                textNode = walker.nextNode();
+            }
+        });
+
+        return hiddenCount;
+    }
+
+    function hideWatchPageLikePillFallback(root = document) {
+        if (!isWatchPage()) {
+            return 0;
+        }
+
+        let hiddenCount = 0;
+        getWatchLikePills(root).forEach((pill) => {
+            if (pill.getAttribute(WATCH_LIKE_PILL_FALLBACK_ATTR) === "true") {
+                return;
+            }
+
+            pill.setAttribute(WATCH_LIKE_PILL_FALLBACK_ATTR, "true");
+            pill.setAttribute(COUNT_SCANNED_ATTR, "true");
+            hiddenCount += 1;
+        });
+        return hiddenCount;
     }
 
     function unhideEngagementCounts(root = document) {
@@ -677,6 +1022,11 @@
             } else {
                 element.removeAttribute("aria-hidden");
             }
+        });
+
+        queryAllIncludingRoot(root, `[${WATCH_LIKE_PILL_FALLBACK_ATTR}="true"]`).forEach((element) => {
+            element.removeAttribute(WATCH_LIKE_PILL_FALLBACK_ATTR);
+            element.removeAttribute(COUNT_SCANNED_ATTR);
         });
     }
 
@@ -708,9 +1058,15 @@
     }
 
     function hideEngagementCounts(root = document) {
+        debugWatchPageLikeCountDom(root);
         installCountsStyle();
+        const reachableWatchLikeCountHidden = hideReachableWatchPageLikeCountText(root);
         hideCountTextCandidates(root);
         hideCountsInsideRelatedControls(root);
+        if (reachableWatchLikeCountHidden === 0) {
+            hideWatchPageLikePillFallback(root);
+        }
+        debugLog("hide views/likes scan complete", root === document ? "document" : root.nodeName);
     }
 
     function removeDirectShorts(root = document) {
@@ -800,6 +1156,7 @@
             unhideEngagementCounts();
         }
 
+        debugLog("features applied", currentSettings);
         return true;
     }
 
